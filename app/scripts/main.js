@@ -3,11 +3,10 @@ window.$ = jquery;
 window.jQuery = jquery;
 
 $(document).ready(function() {
-  // jquery('h1').css('color', 'blue');
-  // const print = ms => {
-  //   console.log(ms);
-  // };
-  // print('text');
+  const print = ms => {
+    console.log(ms);
+  };
+  print('text');
 });
 
 $(document).ready(function() {

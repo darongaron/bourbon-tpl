@@ -1,5 +1,7 @@
-Gulp Bourbon template
+bourbon-tpl
 ===============
+
+Gulp Bourbon template.
 
 Install
 ---------------

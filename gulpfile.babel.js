@@ -8,10 +8,10 @@ import del          from 'del';
 import gulp         from 'gulp';
 import cache        from 'gulp-cache';
 import eslint       from 'gulp-eslint';
+import htmlmin      from 'gulp-htmlmin';
 import gulpIf       from 'gulp-if';
 import imagemin     from 'gulp-imagemin';
 import minifyCss    from 'gulp-minify-css';
-import minifyHtml   from 'gulp-minify-html';
 import sass         from 'gulp-sass';
 import sourcemaps   from 'gulp-sourcemaps';
 import uglify       from 'gulp-uglify';
@@ -23,12 +23,16 @@ import source       from 'vinyl-source-stream';
 const reload    = browserSync.reload;
 const neat      = `${__dirname}/node_modules/bourbon-neat/`;
 
-let isWatchify  = false;
-let isRelease   = false;
+let isWatch   = false;
+let isRelease = false;
 
-gulp.task('watchify', () => isWatchify = true);
+gulp.task('watchify', () => {
+  isWatch = true;
+  console.log('isWatch:', isWatch);
+});
 gulp.task('release', cb => {
   isRelease = true;
+  console.log('isRelease:', isRelease);
   cb();
 });
 
@@ -48,8 +52,7 @@ gulp.task('copy:nm', () =>
     base: 'node_modules',
     dot: true
   })
-  .pipe(gulp.dest('.tmp/modules'))
-  .pipe(gulp.dest('dist/modules'))
+  .pipe(gulpIf(isRelease, gulp.dest('dist/modules'), gulp.dest('.tmp/modules')))
 );
 
 gulp.task('clean', cb => {
@@ -69,13 +72,15 @@ gulp.task('styles', () => {
   }).on('error', sass.logError))
   .pipe(gulpIf(isRelease, minifyCss()))
   .pipe(gulpIf(!isRelease, sourcemaps.write()))
-  .pipe(gulpIf(isRelease, gulp.dest('dist/styles'), gulp.dest('.tmp/styles')));
+  .pipe(gulpIf(isRelease, gulp.dest('dist/styles'), gulp.dest('.tmp/styles')))
+  .pipe(gulpIf(browserSync.active, reload({stream: true})));
 });
 
 gulp.task('lint', () =>
   gulp.src(['app/scripts/**/*.js', 'gulpfile.babel.js'])
   .pipe(eslint({
-    globals: {$: true, document: true, window: true},
+    extends: 'google',
+    env: {browser: true, node: true, jquery: true},
     rules: {
       'no-multi-spaces': [2, {exceptions: {
         VariableDeclarator: true,
@@ -85,7 +90,6 @@ gulp.task('lint', () =>
   }))
   .pipe(eslint.format())
   .pipe(gulpIf(!browserSync.active, eslint.failOnError()))
-  // .pipe(eslint.failOnError())
 );
 
 gulp.task('images', () =>
@@ -103,12 +107,11 @@ gulp.task('scripts', () => {
     // basedir: './',
     // plugin: [watchify],
     transform: [babelify]
-    // transform: babelify.configure({presets: ["es2015", "react", "stage-2"]}),
+    // transform: babelify.configure({presets: ['es2015', 'react', 'stage-2'], presets: ['es2015'], retainLines: true})
   };
 
   let bundler = browserify(browserifyOpts);
-  console.log('isWatchify:', isWatchify);
-  if (isWatchify) {
+  if (isWatch) {
     browserifyOpts.cache = {};
     browserifyOpts.packageCache = {};
     browserifyOpts.debug = true;
@@ -133,15 +136,8 @@ gulp.task('scripts', () => {
     ))
     .on('end', () => {
       console.log('Bundled[ s, ns ]:', process.hrtime(time));
-      if (isWatchify) {
-        // reload({stream: true, once: true});
-        // browserSync.stream({once: true});
-        reload();
-      }
-    });
-    // .pipe(gulpIf(browserSync.active, reload({stream: true, once: true})));
-    // .pipe(gulpIf(isWatchify, reload({stream: true, once: true})));
-    // .pipe(gulpIf(isWatchify, browserSync.stream({once: true})));
+    })
+    .pipe(gulpIf(browserSync.active, browserSync.stream({once: true})));
   };
   bundler.on('update', execBundle);
   return execBundle();
@@ -151,7 +147,17 @@ gulp.task('scripts:watch', cb => runSequence('watchify', 'scripts', cb));
 
 gulp.task('html', () => {
   return gulp.src('app/**/*.html')
-  .pipe(minifyHtml())
+  .pipe(htmlmin({
+    removeComments: true,
+    collapseWhitespace: true,
+    collapseBooleanAttributes: true,
+    removeAttributeQuotes: true,
+    removeRedundantAttributes: true,
+    removeEmptyAttributes: true,
+    removeScriptTypeAttributes: true,
+    removeStyleLinkTypeAttributes: true,
+    removeOptionalTags: true
+  }))
   .pipe(gulp.dest('dist'));
 });
 
@@ -165,7 +171,7 @@ gulp.task('serve', ['copy:nm', 'scripts:watch', 'styles'], () => {
   });
 
   gulp.watch(['app/**/*.html'], reload);
-  gulp.watch(['app/styles/**/*.{scss,css}'], ['styles', reload]);
+  gulp.watch(['app/styles/**/*.{scss,css}'], ['styles']);
   gulp.watch(['app/scripts/**/*.js', 'gulpfile.babel.js'], ['lint']);
   gulp.watch(['app/images/**/*'], reload);
 });
